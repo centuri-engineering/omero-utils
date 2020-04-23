@@ -31,6 +31,21 @@ def get_rois_as_labels(image, conn):
     return labels
 
 
+def get_roi_as_arrays(roi):
+    roi_arrays = []
+    for u in range(roi.sizeOfShapes()):
+        shape = roi.getShape(u)
+        roi_arrays.append(
+            np.array(
+                [
+                    [float(v) for v in l.split(",") if v]
+                    for l in shape.getPoints().val.split(" ")
+                ]
+            )
+        )
+    return roi_arrays
+
+
 def mask_from_polyon_shape(shape, imshape):
     """Converts an omero roi `shape` (as returned by the `roi.getShape` method)
     to a binay image with the pixels inside the shape set to 1.
