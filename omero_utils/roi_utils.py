@@ -89,7 +89,7 @@ def get_rois_as_labels(image, conn):
     imshape = (image.getSizeX(), image.getSizeY())
 
     roi_service = conn.getRoiService()
-    rois = roi_service.findByImage(image.getId(), None).rois
+    rois = roi_service.findByImage(image.getId(), None, conn.SERVICE_OPTS).rois
     labels = np.zeros(imshape)
     for i, roi in enumerate(rois):
         for u in range(roi.sizeOfShapes()):
