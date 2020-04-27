@@ -10,5 +10,7 @@ dependencies:
   - jupyter
   - notebook
   - pbqplot
+  - imageio
+  - scikit-image
   - ipywidgets
   - omero-py

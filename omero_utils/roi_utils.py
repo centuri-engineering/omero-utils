@@ -1,8 +1,76 @@
+import io
+import base64
 import numpy as np
 
-from skimage.draw import polygon2mask
+from skimage.draw import polygon2mask, polygon_perimeter
 import omero
+import imageio
 from omero.rtypes import rint, rstring
+
+
+def get_roi_thumb(conn, image, roi, z=None, t=None, c=None, draw_roi=True):
+    """Returns a numpy array with the region around the roi image
+
+    For now only shape ROIs are supported
+
+    Parameters
+    ----------
+    conn : a BlitzGateway connection to an omero database
+    image : an  `omero.gateway.ImageWrapper` object
+    roi : an omero `omero.gateway.RoiWrapper` object
+    z : int
+        the Z plane (defaults to the central plane)
+    t : int
+        the time point (defaults to the midle of the sequence)
+    c : int or list of ints
+        the channel(s) (defaults to the first 3 colors)
+    draw_roi : bool, default True
+        whether to draw the ROI shape
+    """
+    if not conn.isConnected():
+        conn.connect()
+    pixels = image.getPrimaryPixels()
+    if z is None:
+        z = pixels.sizeZ // 2
+    if t is None:
+        t = pixels.sizeT // 2
+
+    roi = get_roi_as_arrays(roi)[0].astype(int)
+    x, y = (roi.min(axis=0).astype(int) - 1).clip(min=0)
+    width, height = (np.ptp(roi, axis=0) - 1).astype(int)
+
+    tile = x, y, width, height
+    if c is None:
+        tiles = pixels.getTiles([(z, i, t, tile) for i in range(min(pixels.sizeC, 3))])
+    elif isinstance(c, list):
+        tiles = pixels.getTiles([(z, i, t, tile) for i in c])
+    elif isinstance(c, int):
+        tiles = pixels.getTile((z, c, t, tile))
+
+    thumb = (
+        np.concatenate(list(tiles))
+        .reshape((-1, height, width))
+        .swapaxes(0, -1)
+        .swapaxes(0, 1)
+    )
+    if draw_roi:
+        max_int = image.getPixelRange()[1]
+        shifted = (roi - np.array([x + 3, y + 3])[None, :]).clip(min=0)
+        coords = polygon_perimeter(shifted[:, 0], shifted[:, 1])
+        thumb[coords[1], coords[0]] = max_int
+
+    return thumb
+
+
+def html_thumb(thumb):
+    """Returns an HTML
+    """
+    with io.BytesIO() as out:
+        imageio.imwrite(out, thumb, format="PNG")
+        out.seek(0)
+        thumb = base64.b64encode(out.read()).decode("utf-8")
+
+    return f"""<img style="width: 200px; max-height: 200px" src="data:image/png;base64,{thumb}">"""
 
 
 def get_rois_as_labels(image, conn):
