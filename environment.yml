@@ -1,0 +1,14 @@
+name: omero
+channels:
+  - defaults
+  - conda-forge
+  - ome
+dependencies:
+  - pandas
+  - numpy
+  - matplotlib
+  - jupyter
+  - notebook
+  - pbqplot
+  - ipywidgets
+  - omero-py
