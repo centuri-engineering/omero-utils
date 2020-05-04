@@ -2,19 +2,13 @@
 
 """
 import base64
+from time import sleep
 import ipywidgets as widgets
 from IPython.display import display, Image
 from omero.gateway import BlitzGateway
 from omero.rtypes import rint
 import pandas as pd
-from bqplot import (
-    Figure,
-    Scatter,
-    LinearScale,
-    Axis,
-    Toolbar,
-    ColorScale,
-)
+from bqplot import Figure, Scatter, LinearScale, Axis, Toolbar, ColorScale, ColorAxis
 from .roi_utils import get_roi_thumb, html_thumb
 
 
@@ -47,6 +41,8 @@ class OMEConnect(widgets.VBox):
             with self.out:
                 print("Logging successful!\n")
                 display(Image("https://media.giphy.com/media/Azwmdv1NTSe9W/giphy.gif"))
+                sleep(3)
+                self.out.clear_output()
         else:
             with self.out:
                 ("sorry, connection failed, try again?")
@@ -55,24 +51,30 @@ class OMEConnect(widgets.VBox):
 
 
 class ThumbScatterViz(widgets.VBox):
-    def __init__(self, conn, measures, port=4080):
+    def __init__(
+        self, conn, measures, x=None, y=None, c=None, port=4080, mouseover=False
+    ):
 
         self.conn = conn
         self.port = port
         self.measures = measures
         self.columns = list(measures.columns)
+        x_col = x if x else self.columns[0]
+        y_col = y if y else self.columns[1]
+        c_col = c if c else self.columns[2]
+
         selector_layout = widgets.Layout(height="40px", width="100px")
         sbox_layout = widgets.Layout(min_width="120px")
         self.x_selecta = widgets.Dropdown(
             options=self.columns,
-            value=self.columns[0],
+            value=x_col,
             description="",
             disabled=False,
             layout=selector_layout,
         )
         self.y_selecta = widgets.Dropdown(
             options=self.columns,
-            value=self.columns[1],
+            value=y_col,
             description="",
             disabled=False,
             layout=selector_layout,
@@ -80,7 +82,7 @@ class ThumbScatterViz(widgets.VBox):
 
         self.c_selecta = widgets.Dropdown(
             options=self.columns,
-            value=self.columns[2],
+            value=c_col,
             description="",
             disabled=False,
             layout=selector_layout,
@@ -104,13 +106,20 @@ class ThumbScatterViz(widgets.VBox):
             fill=True,
             default_opacities=[0.8,],
         )
-        self.ax_x = Axis(scale=x_sc, label=self.x_selecta.value, tick_format="0.2f")
+        self.ax_x = Axis(scale=x_sc, label=self.x_selecta.value)
         self.ax_y = Axis(scale=y_sc, label=self.y_selecta.value, orientation="vertical")
-        self.fig = Figure(marks=[self.scat,], axes=[self.ax_x, self.ax_y],)
+        self.ax_c = ColorAxis(
+            scale=c_sc,
+            label=self.c_selecta.value,
+            orientation="vertical",
+            offset={"scale": y_sc, "value": 10},
+        )
+        self.fig = Figure(marks=[self.scat,], axes=[self.ax_x, self.ax_y, self.ax_c],)
         self.scat.on_element_click(self.goto_db)
         self.scat.on_element_click(self.show_data)
-        self.scat.on_hover(self.show_thumb)
-        self.scat.tooltip = widgets.HTML("")
+        if mouseover:
+            self.scat.on_hover(self.show_thumb)
+            self.scat.tooltip = widgets.HTML("")
         self.x_selecta.observe(self.update_scatter)
         self.y_selecta.observe(self.update_scatter)
         self.c_selecta.observe(self.update_scatter)
@@ -144,6 +153,7 @@ class ThumbScatterViz(widgets.VBox):
         self.scat.y = self.measures[self.y_selecta.value]
         self.ax_y.label = self.y_selecta.value
         self.scat.color = self.measures[self.c_selecta.value]
+        self.ax_c.label = self.c_selecta.value
 
     def get_thumb(self, idx):
         raise NotImplementedError
@@ -170,10 +180,29 @@ class ThumbScatterViz(widgets.VBox):
 
 
 class ROIScatterViz(ThumbScatterViz):
-    def __init__(self, conn, image, measures, port=4080):
+    """Interactive Scatter plot widget for ROI related measurement data.
 
+    Each line in the input `measure` DataFrame corresponds to a ROI
+    """
+
+    def __init__(
+        self, conn, image, measures, x=None, y=None, c=None, port=4080, mouseover=False
+    ):
+        """
+        Parameters
+        ----------
+        conn : a `BlitzGateway` connection to an omero database
+        image : an omero `Image` instance
+        measures : a pandas `DataFrame`
+        x, y, c : column names from measures
+           those will be used as the x, y and color values for the initial plot
+        port : int, default 4080, the port to connect to the DB
+        mouseover : bool, default False
+            if True, will display a thumbnail as mouse over tooltip - might be lagging
+
+        """
         self.image = image
-        super().__init__(conn, measures, port)
+        super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
         self.base_url = f"""http://{self.conn.host}:{self.port}/webclient/img_detail/{self.image.id}/"""
         if not conn.isConnected():
             conn.connect()
@@ -207,8 +236,10 @@ class ROIScatterViz(ThumbScatterViz):
 
 
 class ImageScatterViz(ThumbScatterViz):
-    def __init__(self, conn, measures, port=4080):
-        super().__init__(conn, measures, port)
+    def __init__(
+        self, conn, measures, x=None, y=None, c=None, port=4080, mouseover=False
+    ):
+        super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
         self.thumbs = {}
 
     def get_thumb(self, idx):
