@@ -9,8 +9,10 @@ dependencies:
   - matplotlib
   - jupyter
   - notebook
-  - pbqplot
+  - bqplot
   - imageio
   - scikit-image
   - ipywidgets
   - omero-py
+  - nodejs
+  - jupyterlab
