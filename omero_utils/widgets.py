@@ -52,7 +52,7 @@ class OMEConnect(widgets.VBox):
 
 class ThumbScatterViz(widgets.VBox):
     def __init__(
-        self, conn, measures, x=None, y=None, c=None, port=4080, mouseover=False
+        self, conn, measures, x=None, y=None, c=None, port=4090, mouseover=False
     ):
 
         self.conn = conn
@@ -186,7 +186,7 @@ class ROIScatterViz(ThumbScatterViz):
     """
 
     def __init__(
-        self, conn, image, measures, x=None, y=None, c=None, port=4080, mouseover=False
+        self, conn, image, measures, x=None, y=None, c=None, port=4090, mouseover=False
     ):
         """
         Parameters
@@ -196,14 +196,14 @@ class ROIScatterViz(ThumbScatterViz):
         measures : a pandas `DataFrame`
         x, y, c : column names from measures
            those will be used as the x, y and color values for the initial plot
-        port : int, default 4080, the port to connect to the DB
+        port : int, default 4090, the port to connect to the DB
         mouseover : bool, default False
             if True, will display a thumbnail as mouse over tooltip - might be lagging
 
         """
         self.image = image
         super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
-        self.base_url = f"""http://{self.conn.host}:{self.port}/webclient/img_detail/{self.image.id}/"""
+        self.base_url = f"""https://{self.conn.host}:{self.port}/webclient/img_detail/{self.image.id}/"""
         if not conn.isConnected():
             conn.connect()
         roi_service = conn.getRoiService()
@@ -265,5 +265,5 @@ class ImageScatterViz(ThumbScatterViz):
         name = target["data"]["name"]
         html_ = self.get_thumb(name)
 
-        url = f"""http://{self.conn.host}:{self.port}/webclient/img_detail/{name}/"""
+        url = f"""https://{self.conn.host}:{self.port}/webclient/img_detail/{name}/"""
         self.goto.value = f'<p><hr></p><a href={url} target="_blank">{html_}</a>'
