@@ -8,7 +8,18 @@ from IPython.display import display, Image
 from omero.gateway import BlitzGateway
 from omero.rtypes import rint
 import pandas as pd
-from bqplot import Figure, Scatter, LinearScale, Axis, Toolbar, ColorScale, ColorAxis
+from bqplot import (
+    Figure,
+    Scatter,
+    LinearScale,
+    Axis,
+    Toolbar,
+    ColorScale,
+    ColorAxis,
+    DateScale,
+    DateColorScale,
+)
+
 from .roi_utils import get_roi_thumb, html_thumb
 
 
@@ -17,6 +28,14 @@ class OMEConnect(widgets.VBox):
     """
 
     def __init__(self, host="localhost", port=4064):
+        """Connects to an omero database.
+
+        Parameters
+        ----------
+        host: str, the omero server host (default localhost)
+        port: int, the connection port (default 4064)
+
+        """
         self.host = host
         self.port = port
         self.logbox = widgets.Text(description="OME loggin")
@@ -54,7 +73,10 @@ class ThumbScatterViz(widgets.VBox):
     def __init__(
         self, conn, measures, x=None, y=None, c=None, port=4090, mouseover=False
     ):
-
+        """Interactive scatter plot visualisation - this is a base class,
+        use either `ROIScatterViz` for one image with multiple ROIs
+        or `ImageScatterViz` for a scatterplot with multiple images
+        """
         self.conn = conn
         self.port = port
         self.measures = measures
@@ -92,9 +114,20 @@ class ThumbScatterViz(widgets.VBox):
         self.conn = conn
         self.thumbs = {}
         self.goto = widgets.HTML("")
-        x_sc = LinearScale()
-        y_sc = LinearScale()
-        c_sc = ColorScale(scheme="viridis")
+        if is_datetime(self.measures, x_col):
+            x_sc = DateScale()
+        else:
+            x_sc = LinearScale()
+
+        if is_datetime(self.measures, y_col):
+            y_sc = DateScale()
+        else:
+            y_sc = LinearScale()
+
+        if is_datetime(self.measures, c_col):
+            c_sc = DateColorScale(scheme="viridis")
+        else:
+            c_sc = ColorScale()
 
         self.scat = Scatter(
             x=self.measures[self.x_selecta.value],
@@ -112,7 +145,7 @@ class ThumbScatterViz(widgets.VBox):
             scale=c_sc,
             label=self.c_selecta.value,
             orientation="vertical",
-            offset={"scale": y_sc, "value": 10},
+            offset={"scale": y_sc, "value": 100},
         )
         self.fig = Figure(marks=[self.scat,], axes=[self.ax_x, self.ax_y, self.ax_c],)
         self.scat.on_element_click(self.goto_db)
@@ -147,13 +180,37 @@ class ThumbScatterViz(widgets.VBox):
         )
 
     def update_scatter(self, elem):
-        self.scat.x = self.measures[self.x_selecta.value]
-        self.ax_x.label = self.x_selecta.value
+        col = self.x_selecta.value
+        if is_datetime(self.measures, col):
+            x_sc = DateScale()
+        else:
+            x_sc = LinearScale()
+        self.ax_x.scale = x_sc
+        self.scat.x = self.measures[col]
+        self.ax_x.label = col
 
-        self.scat.y = self.measures[self.y_selecta.value]
-        self.ax_y.label = self.y_selecta.value
-        self.scat.color = self.measures[self.c_selecta.value]
-        self.ax_c.label = self.c_selecta.value
+        col = self.y_selecta.value
+        if is_datetime(self.measures, col):
+            y_sc = DateScale()
+        else:
+            y_sc = LinearScale()
+        self.ax_y.scale = y_sc
+        self.scat.y = self.measures[col]
+        self.ax_y.label = col
+
+        col = self.c_selecta.value
+        if is_datetime(self.measures, col):
+            c_sc = DateColorScale()
+        else:
+            c_sc = ColorScale()
+        self.ax_c.scale = c_sc
+        self.scat.color = self.measures[col]
+        self.ax_c.label = col
+        self.scat.scales = {
+            "x": x_sc,
+            "y": y_sc,
+            "color": c_sc,
+        }
 
     def get_thumb(self, idx):
         raise NotImplementedError
@@ -237,8 +294,21 @@ class ROIScatterViz(ThumbScatterViz):
 
 class ImageScatterViz(ThumbScatterViz):
     def __init__(
-        self, conn, measures, x=None, y=None, c=None, port=4080, mouseover=False
+        self, conn, measures, x=None, y=None, c=None, port=4090, mouseover=False
     ):
+        """Scatterplot with dynamic link to images in an omero database
+
+        Parameters
+        ----------
+        conn : a `BlitzGateway` connection to an omero database
+        measures : a `pandas.DataFrame` indexed by the images id in the database
+        x: str, a column from the measures for the x axis
+        y: str, a column from the measures for the y axis
+        c: str, a column from the measures for the color scale
+
+        mouseover: bool, default False
+            if True, displays a thumbnail of the image when the mouse is over a point
+        """
         super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
         self.thumbs = {}
 
@@ -252,11 +322,14 @@ class ImageScatterViz(ThumbScatterViz):
             self.conn.connect()
             self.conn.SERVICE_OPTS.setOmeroGroup("-1")
             tb = self.conn.createThumbnailStore()
+            try:
+                tb.setPixelsId(idx, self.conn.SERVICE_OPTS)
+                th = tb.getThumbnailDirect(rint(128), rint(128), self.conn.SERVICE_OPTS)
+                th = base64.b64encode(th).decode("utf-8")
+                thumb = f'{tag_start}{th}">'
+            except omero.ResourceError:
+                thumb = "<p>Image not reachable</p>"
 
-            tb.setPixelsId(idx, self.conn.SERVICE_OPTS)
-            th = tb.getThumbnailDirect(rint(128), rint(128), self.conn.SERVICE_OPTS)
-            th = base64.b64encode(th).decode("utf-8")
-            thumb = f'{tag_start}{th}">'
             self.thumbs[idx] = thumb
 
         return thumb
@@ -267,3 +340,8 @@ class ImageScatterViz(ThumbScatterViz):
 
         url = f"""https://{self.conn.host}:{self.port}/webclient/img_detail/{name}/"""
         self.goto.value = f'<p><hr></p><a href={url} target="_blank">{html_}</a>'
+
+
+def is_datetime(data, col):
+
+    return hasattr(data[col], "dt")

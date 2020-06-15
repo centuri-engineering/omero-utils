@@ -4,9 +4,10 @@ channels:
   - conda-forge
   - ome
 dependencies:
-  - pandas
   - numpy
   - matplotlib
+  - pandas
+  - pytables
   - jupyter
   - notebook
   - bqplot
