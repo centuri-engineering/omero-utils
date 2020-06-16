@@ -71,13 +71,19 @@ class OMEConnect(widgets.VBox):
 
 class ThumbScatterViz(widgets.VBox):
     def __init__(
-        self, conn, measures, x=None, y=None, c=None, port=4090, mouseover=False
+        self,
+        measures,
+        x=None,
+        y=None,
+        c=None,
+        mouseover=False,
+        host="localhost",
+        port=4090,
     ):
         """Interactive scatter plot visualisation - this is a base class,
         use either `ROIScatterViz` for one image with multiple ROIs
         or `ImageScatterViz` for a scatterplot with multiple images
         """
-        self.conn = conn
         self.port = port
         self.measures = measures
         self.columns = list(measures.columns)
@@ -86,7 +92,6 @@ class ThumbScatterViz(widgets.VBox):
         c_col = c if c else self.columns[2]
 
         selector_layout = widgets.Layout(height="40px", width="100px")
-        sbox_layout = widgets.Layout(min_width="120px")
         self.x_selecta = widgets.Dropdown(
             options=self.columns,
             value=x_col,
@@ -111,7 +116,6 @@ class ThumbScatterViz(widgets.VBox):
         )
 
         self.sheet = widgets.Output()
-        self.conn = conn
         self.thumbs = {}
         self.goto = widgets.HTML("")
         if is_datetime(self.measures, x_col):
@@ -156,28 +160,47 @@ class ThumbScatterViz(widgets.VBox):
         self.x_selecta.observe(self.update_scatter)
         self.y_selecta.observe(self.update_scatter)
         self.c_selecta.observe(self.update_scatter)
+        self.connector = OMEConnect(host=host, port=4064)
+        self.connector.gobtn.on_click(self.setup_graph)
+        super().__init__([self.connector])
 
-        super().__init__(
-            [
-                widgets.HBox(
-                    [
-                        widgets.VBox(
-                            [
-                                widgets.HTML("<a><h4>x axis</h4></a>"),
-                                self.x_selecta,
-                                widgets.HTML("<a><h4>y axis</h4></a>"),
-                                self.y_selecta,
-                                widgets.HTML("<a><h4>color</h4></a>"),
-                                self.c_selecta,
-                            ],
-                            layout=sbox_layout,
-                        ),
-                        widgets.VBox([self.fig, Toolbar(figure=self.fig)]),
-                    ]
-                ),
-                widgets.HBox([self.goto, self.sheet]),
-            ]
-        )
+    def setup_graph(self, btn):
+
+        if self.connector.conn is None:
+            return
+
+        self.conn = self.connector.conn
+        wait = 0
+        while not self.connector.conn.isConnected():
+            sleep(1)
+            wait += 1
+            if wait > 30:
+                self.children = [widgets.HTML("<a><h4>Connection time out</h4></a>")]
+                return
+
+        sbox_layout = widgets.Layout(min_width="120px")
+        fig_layout = widgets.Layout(max_width="800px")
+        self.children = [
+            widgets.HBox(
+                [
+                    widgets.VBox(
+                        [
+                            widgets.HTML("<a><h4>x axis</h4></a>"),
+                            self.x_selecta,
+                            widgets.HTML("<a><h4>y axis</h4></a>"),
+                            self.y_selecta,
+                            widgets.HTML("<a><h4>color</h4></a>"),
+                            self.c_selecta,
+                        ],
+                        layout=sbox_layout,
+                    ),
+                    widgets.VBox(
+                        [self.fig, Toolbar(figure=self.fig)], layout=fig_layout
+                    ),
+                    widgets.VBox([self.goto, self.sheet], layout=sbox_layout),
+                ]
+            ),
+        ]
 
     def update_scatter(self, elem):
         col = self.x_selecta.value
@@ -243,12 +266,19 @@ class ROIScatterViz(ThumbScatterViz):
     """
 
     def __init__(
-        self, conn, image, measures, x=None, y=None, c=None, port=4090, mouseover=False
+        self,
+        image,
+        measures,
+        x=None,
+        y=None,
+        c=None,
+        mouseover=False,
+        port=4090,
+        host="localhost",
     ):
         """
         Parameters
         ----------
-        conn : a `BlitzGateway` connection to an omero database
         image : an omero `Image` instance
         measures : a pandas `DataFrame`
         x, y, c : column names from measures
@@ -259,7 +289,9 @@ class ROIScatterViz(ThumbScatterViz):
 
         """
         self.image = image
-        super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
+        super().__init__(
+            measures, x=x, y=y, c=c, port=port, mouseover=mouseover, host=host
+        )
         self.base_url = f"""https://{self.conn.host}:{self.port}/webclient/img_detail/{self.image.id}/"""
         if not conn.isConnected():
             conn.connect()
@@ -294,7 +326,14 @@ class ROIScatterViz(ThumbScatterViz):
 
 class ImageScatterViz(ThumbScatterViz):
     def __init__(
-        self, conn, measures, x=None, y=None, c=None, port=4090, mouseover=False
+        self,
+        measures,
+        x=None,
+        y=None,
+        c=None,
+        port=4090,
+        mouseover=False,
+        host="localhost",
     ):
         """Scatterplot with dynamic link to images in an omero database
 
@@ -309,7 +348,9 @@ class ImageScatterViz(ThumbScatterViz):
         mouseover: bool, default False
             if True, displays a thumbnail of the image when the mouse is over a point
         """
-        super().__init__(conn, measures, x=x, y=y, c=c, port=port, mouseover=mouseover)
+        super().__init__(
+            measures, x=x, y=y, c=c, port=port, mouseover=mouseover, host=host
+        )
         self.thumbs = {}
 
     def get_thumb(self, idx):
