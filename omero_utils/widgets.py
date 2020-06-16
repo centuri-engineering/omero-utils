@@ -267,7 +267,7 @@ class ROIScatterViz(ThumbScatterViz):
 
     def __init__(
         self,
-        image,
+        image_id,
         measures,
         x=None,
         y=None,
@@ -288,16 +288,23 @@ class ROIScatterViz(ThumbScatterViz):
             if True, will display a thumbnail as mouse over tooltip - might be lagging
 
         """
-        self.image = image
+        self.image_id = image_id
+        self.image = None
+        self.base_url = None
         super().__init__(
             measures, x=x, y=y, c=c, port=port, mouseover=mouseover, host=host
         )
+
+    def setup_graph(self, btn):
+
+        super().setup_graph(btn)
+        self.image = self.conn.getObject("Image", self.image_id)
         self.base_url = f"""https://{self.conn.host}:{self.port}/webclient/img_detail/{self.image.id}/"""
-        if not conn.isConnected():
-            conn.connect()
-        roi_service = conn.getRoiService()
+        if not self.conn.isConnected():
+            self.conn.connect()
+        roi_service = self.conn.getRoiService()
         self.rois = roi_service.findByImage(
-            self.image.getId(), None, conn.SERVICE_OPTS
+            self.image.getId(), None, self.conn.SERVICE_OPTS
         ).rois
 
     def get_thumb(self, idx):
