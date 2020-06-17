@@ -142,7 +142,7 @@ class OmeroImageReader(ImageReader):
             "SizeC": self.image.getSizeC(),
             "SizeT": self.image.getSizeT(),
             "Id": self.image.getId(),
-            "AquisitionDate": self.image.getAcquisitionDate().isoformat(),
+            "AquisitionDate": self.image.getAcquisitionDate(),
             "PhysicalSizeX": sizex.getValue(),
             "ChannelLabels": self.image.getChannelLabels(),
         }
