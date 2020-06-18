@@ -5,6 +5,7 @@ import base64
 from time import sleep
 import ipywidgets as widgets
 from IPython.display import display, Image
+import omero
 from omero.gateway import BlitzGateway
 from omero.rtypes import rint
 import pandas as pd
